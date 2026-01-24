@@ -6,7 +6,7 @@ on:
   workflow_dispatch:    # Allows manual trigger
 
 jobs:
-  hourly_prediction:
+  hourly_data_fetch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -27,7 +27,7 @@ jobs:
           if [ -z "${{ secrets.OPENWEATHER_TOKEN }}" ]; then echo "❌ OPENWEATHER_TOKEN is missing!"; exit 1; fi
           echo "✅ Secrets are present."
 
-      - name: Run Prediction Script
+      - name: Run Data Fetch Script
         env:
           HOPSWORKS_TOKEN: ${{ secrets.HOPSWORKS_TOKEN }}
           OPENWEATHER_TOKEN: ${{ secrets.OPENWEATHER_TOKEN }}
