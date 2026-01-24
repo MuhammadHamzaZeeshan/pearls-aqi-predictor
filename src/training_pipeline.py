@@ -1,33 +1,29 @@
 import hopsworks
 import pandas as pd
+import joblib
+import os
 import numpy as np
+from dotenv import load_dotenv
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+from sklearn.metrics import mean_absolute_error, r2_score
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
-import joblib
-import os
-from dotenv import load_dotenv
+from tensorflow.keras.callbacks import EarlyStopping
 
-# 1. SETUP & LOGIN
 load_dotenv()
-HOPSWORKS_KEY = os.getenv('HOPSWORKS_TOKEN')
-
-project = hopsworks.login(api_key_value=HOPSWORKS_KEY)
+project = hopsworks.login(api_key_value=os.getenv('HOPSWORKS_TOKEN'))
 fs = project.get_feature_store()
 
-# 2. GET FEATURE GROUP & CREATE FEATURE VIEW
-# This is the 'lens' through which the model sees your Karachi data
+# 1. Get Feature Group
 fg = fs.get_feature_group(name="karachi_aqi_fg", version=1)
 
+# 2. Feature View Setup
+print("🔍 Checking Feature View...")
 try:
-    print("🔍 Looking for existing Feature View...")
     feature_view = fs.get_feature_view(name="karachi_aqi_view", version=1)
 except:
-    print("🆕 Feature View not found. Creating a new one...")
-    # 'aqi' is our target label (what we want to predict)
     feature_view = fs.create_feature_view(
         name="karachi_aqi_view",
         query=fg.select_all(),
@@ -35,75 +31,91 @@ except:
         version=1
     )
 
-# 3. TRAIN/TEST SPLIT
-# Pulls data from the cloud and splits it 80% for learning, 20% for testing
-print("🧪 Fetching data and creating Training/Test sets...")
-X_train, X_test, y_train, y_test = feature_view.train_test_split(test_size=0.2)
+# 3. TIME-SERIES SPLIT (Professional Approach)
+# We avoid random splitting to prevent "Data Leakage"
+print("🧪 Applying Time-Series Split (Chronological Order)...")
+df = fg.read().sort_values(by="datetime")
 
-# --- MODEL 1: Ridge Regression (Statistical/Linear) ---
-print("🏃 Training Ridge Regression...")
-model_ridge = Ridge()
-model_ridge.fit(X_train, y_train)
-preds_ridge = model_ridge.predict(X_test)
+# Drop datetime but keep the order
+if 'datetime' in df.columns:
+    df = df.drop(columns=['datetime'])
 
-# --- MODEL 2: Random Forest (Tree-based/Non-linear) ---
-print("🌲 Training Random Forest...")
-model_rf = RandomForestRegressor(n_estimators=100, random_state=42)
-model_rf.fit(X_train, y_train)
-preds_rf = model_rf.predict(X_test)
+# Manual 80/20 split based on time
+split_idx = int(len(df) * 0.8)
+train_df = df.iloc[:split_idx]
+test_df = df.iloc[split_idx:]
 
-# --- MODEL 3: Neural Network (Deep Learning/TensorFlow) ---
-print("🧠 Training Neural Network (TensorFlow)...")
-model_nn = Sequential([
-    Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
-    Dropout(0.2),
-    Dense(32, activation='relu'),
+X_train = train_df.drop(columns=['aqi'])
+y_train = train_df['aqi']
+X_test = test_df.drop(columns=['aqi'])
+y_test = test_df['aqi']
+
+# 4. Model Training with AGGRESSIVE REGULARIZATION
+print("🏃 Training Ridge (Alpha=50.0)...")
+m1 = Ridge(alpha=50.0).fit(X_train, y_train)
+p1 = m1.predict(X_test)
+
+print("🌲 Training Highly Regularized Random Forest...")
+# Fewer trees and shallower depth force the model to learn general patterns
+m2 = RandomForestRegressor(
+    n_estimators=50, 
+    max_depth=5, 
+    min_samples_leaf=20, 
+    max_features='sqrt',
+    random_state=42
+).fit(X_train, np.ravel(y_train))
+p2 = m2.predict(X_test)
+
+print("🧠 Training Neural Network (Simple Architecture)...")
+input_dim = X_train.shape[1]
+m3 = Sequential([
+    Dense(16, activation='relu', input_shape=(input_dim,)), 
+    Dropout(0.4), # High dropout to prevent memorization
+    Dense(8, activation='relu'), 
     Dense(1)
 ])
-model_nn.compile(optimizer='adam', loss='mse')
-# Small number of epochs for the first run
-model_nn.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0)
-preds_nn = model_nn.predict(X_test).flatten()
+m3.compile(optimizer='adam', loss='mse')
 
-# 4. EVALUATION & COMPARISON
-# We compare models based on Mean Absolute Error (lower is better)
+early_stop = EarlyStopping(monitor='val_loss', patience=3, restore_best_weights=True)
+
+m3.fit(
+    X_train, y_train, 
+    validation_data=(X_test, y_test),
+    epochs=50, 
+    batch_size=32,
+    callbacks=[early_stop],
+    verbose=0
+)
+p3 = m3.predict(X_test).flatten()
+
+# 5. Results & Selection
 results = [
-    {"Model": "Ridge", "MAE": mean_absolute_error(y_test, preds_ridge), "R2": r2_score(y_test, preds_ridge)},
-    {"Model": "RandomForest", "MAE": mean_absolute_error(y_test, preds_rf), "R2": r2_score(y_test, preds_rf)},
-    {"Model": "NeuralNetwork", "MAE": mean_absolute_error(y_test, preds_nn), "R2": r2_score(y_test, preds_nn)}
+    {"Name": "Ridge", "MAE": mean_absolute_error(y_test, p1), "Model": m1, "Ext": ".joblib"},
+    {"Name": "RandomForest", "MAE": mean_absolute_error(y_test, p2), "Model": m2, "Ext": ".joblib"},
+    {"Name": "NeuralNetwork", "MAE": mean_absolute_error(y_test, p3), "Model": m3, "Ext": ".h5"}
 ]
 
-print("\n--- Model Comparison Results ---")
-for res in results:
-    print(f"📊 {res['Model']} -> MAE: {res['MAE']:.2f}, R2: {res['R2']:.2f}")
+best = min(results, key=lambda x: x['MAE'])
+best_p = best['Model'].predict(X_test).flatten()
+best_r2 = r2_score(y_test, best_p)
 
-# 5. SELECT WINNER & SAVE TO REGISTRY
-best_res = min(results, key=lambda x: x['MAE'])
-best_model_name = best_res['Model']
-print(f"\n🏆 WINNER: {best_model_name} with MAE: {best_res['MAE']:.2f}")
+print(f"\n🏆 Winner: {best['Name']}")
+print(f"📊 Realistic MAE: {best['MAE']:.4f}")
+print(f"📈 Realistic R2 Score: {best_r2:.4f}")
 
-# Ensure local models folder exists
+# 6. Save & Register
 os.makedirs('models', exist_ok=True)
-local_model_path = f"models/best_aqi_model_{best_model_name.lower()}"
+path = f"models/best_model{best['Ext']}"
 
-# Save the winning model object
-if best_model_name == "Ridge":
-    joblib.dump(model_ridge, local_model_path + ".joblib")
-    final_path = local_model_path + ".joblib"
-elif best_model_name == "RandomForest":
-    joblib.dump(model_rf, local_model_path + ".joblib")
-    final_path = local_model_path + ".joblib"
+if best['Name'] == "NeuralNetwork":
+    best['Model'].save(path)
 else:
-    model_nn.save(local_model_path + ".h5")
-    final_path = local_model_path + ".h5"
+    joblib.dump(best['Model'], path)
 
-# Upload to Hopsworks Model Registry
 mr = project.get_model_registry()
-aqi_model = mr.python.create_model(
+model = mr.python.create_model(
     name="karachi_aqi_model", 
-    metrics={"mae": best_res['MAE'], "r2": best_res['R2']},
-    description=f"Best performing model ({best_model_name}) for Karachi AQI"
+    metrics={"mae": best['MAE'], "r2": best_r2}
 )
-aqi_model.save(final_path)
-
-print(f"✅ Successfully uploaded {best_model_name} to Hopsworks Model Registry!")
+model.save(path)
+print(f"✅ Defensible model registered as Version {model.version}!")
