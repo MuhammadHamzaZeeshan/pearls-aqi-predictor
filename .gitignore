@@ -1,0 +1,13 @@
+# Python environment
+venv/
+__pycache__/
+*.pyc
+
+# Data and Secrets
+.env
+data/*.csv
+data/*.json
+
+# Operating system files
+.DS_Store
+Thumbs.db

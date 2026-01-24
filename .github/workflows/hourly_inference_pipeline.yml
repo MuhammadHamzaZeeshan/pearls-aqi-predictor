@@ -1,0 +1,23 @@
+name: Hourly AQI Data Prediction
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs every hour
+  workflow_dispatch:    # Allows manual trigger
+
+jobs:
+  hourly_prediction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install pandas requests hopsworks python-dotenv
+      - name: Run Prediction Script
+        env:
+          HOPSWORKS_TOKEN: ${{ secrets.HOPSWORKS_TOKEN }}
+          OPENWEATHER_TOKEN: ${{ secrets.OPENWEATHER_TOKEN }}
+        run: python src/inference_scheduler.py
