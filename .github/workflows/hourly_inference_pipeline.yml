@@ -20,4 +20,4 @@ jobs:
         env:
           HOPSWORKS_TOKEN: ${{ secrets.HOPSWORKS_TOKEN }}
           OPENWEATHER_TOKEN: ${{ secrets.OPENWEATHER_TOKEN }}
-        run: python src/inference_scheduler.py
+        run: python src/inference_pipeline.py

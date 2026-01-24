@@ -1,120 +1,109 @@
 import hopsworks
-import joblib
 import pandas as pd
 import numpy as np
-import os
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
+from sklearn.linear_model import Ridge
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
 import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Dropout
+import joblib
+import os
+from dotenv import load_dotenv
 
-# Load environment variables
+# 1. SETUP & LOGIN
 load_dotenv()
+HOPSWORKS_KEY = os.getenv('HOPSWORKS_TOKEN')
 
-def run_inference():
-    # 1. Login and get the Model Registry
-    project = hopsworks.login(api_key_value=os.getenv('HOPSWORKS_TOKEN'))
-    mr = project.get_model_registry()
-    
-    # --- REALISTIC ZONE FILTER ---
-    # We reject models > 0.92 because they are likely overfitted/leaked
-    MAX_REALISTIC_R2 = 0.92  
-    MIN_ACCEPTABLE_R2 = 0.60  
-    EVALUATION_METRIC = "r2"
+project = hopsworks.login(api_key_value=HOPSWORKS_KEY)
+fs = project.get_feature_store()
 
-    print("🔎 Searching for a realistic, high-performing model...")
-    all_models = mr.get_models("karachi_aqi_model")
-    
-    # Filter for models that fall within our 'Defensible' zone
-    realistic_models = [
-        m for m in all_models 
-        if MIN_ACCEPTABLE_R2 <= m.training_metrics.get(EVALUATION_METRIC, 0) <= MAX_REALISTIC_R2
-    ]
+# 2. GET FEATURE GROUP & CREATE FEATURE VIEW
+# This is the 'lens' through which the model sees your Karachi data
+fg = fs.get_feature_group(name="karachi_aqi_fg", version=1)
 
-    if realistic_models:
-        # Pick the best one within the realistic range
-        best_model_meta = max(realistic_models, key=lambda m: m.training_metrics.get(EVALUATION_METRIC, 0))
-        print(f"🏆 Realistic Model Selected: Version {best_model_meta.version}")
-        print(f"📊 {EVALUATION_METRIC.upper()} Score: {best_model_meta.training_metrics.get(EVALUATION_METRIC):.4f}")
-    else:
-        # Fallback if no model meets the criteria
-        best_model_meta = all_models[0]
-        print(f"⚠️ No model in Realistic Zone ({MIN_ACCEPTABLE_R2}-{MAX_REALISTIC_R2}). Using latest version: {best_model_meta.version}")
-
-    # Download model files
-    model_dir = best_model_meta.download()
-    
-    # 2. Flexible Model Loading
-    model_path_joblib = os.path.join(model_dir, "best_model.joblib")
-    model_path_h5 = os.path.join(model_dir, "best_model.h5")
-
-    if os.path.exists(model_path_h5):
-        print("🧠 Loading Neural Network model...")
-        model = tf.keras.models.load_model(model_path_h5)
-        is_nn = True
-    else:
-        print("🌲 Loading Random Forest/Ridge model...")
-        model = joblib.load(model_path_joblib)
-        is_nn = False
-    
-    # 3. Setup Feature Store and Feature View
-    fs = project.get_feature_store()
+try:
+    print("🔍 Looking for existing Feature View...")
     feature_view = fs.get_feature_view(name="karachi_aqi_view", version=1)
-    fg = fs.get_feature_group(name="karachi_aqi_fg", version=1)
-    
-    # Get the single latest record to kick off the recursive forecast
-    df = fg.read().sort_values(by="datetime").tail(1)
-    
-    current_aqi = float(df['aqi'].values[0])
-    current_time = pd.to_datetime(df['datetime'].values[0])
-    last_pm25 = float(df['pm2_5'].values[0])
-    last_co = float(df['co'].values[0])
-    last_no2 = float(df['no2'].values[0])
-    
-    forecast_data = []
-    print(f"🔮 Generating 72-hour forecast starting from {current_time}...")
+except:
+    print("🆕 Feature View not found. Creating a new one...")
+    # 'aqi' is our target label (what we want to predict)
+    feature_view = fs.create_feature_view(
+        name="karachi_aqi_view",
+        query=fg.select_all(),
+        labels=["aqi"],
+        version=1
+    )
 
-    # Match the exact column order used during training
-    training_feature_names = [f.name for f in feature_view.query.features 
-                             if f.name not in ['datetime', 'aqi']]
+# 3. TRAIN/TEST SPLIT
+# Pulls data from the cloud and splits it 80% for learning, 20% for testing
+print("🧪 Fetching data and creating Training/Test sets...")
+X_train, X_test, y_train, y_test = feature_view.train_test_split(test_size=0.2)
 
-    # 4. Recursive Prediction Loop
-    for i in range(1, 73):
-        next_time = current_time + timedelta(hours=i)
-        
-        input_data = {
-            'co': [last_co], 'no2': [last_no2], 'o3': [df['o3'].values[0]], 
-            'so2': [df['so2'].values[0]], 'pm2_5': [last_pm25], 'pm10': [df['pm10'].values[0]], 
-            'nh3': [df['nh3'].values[0]],
-            'hour': [int(next_time.hour)],
-            'day_of_week': [int(next_time.weekday())],
-            'month': [int(next_time.month)],
-            'aqi_lag_1h': [float(current_aqi)],
-            'pm2_5_lag_1h': [float(last_pm25)],
-            'co_lag_1h': [float(last_co)],
-            'no2_lag_1h': [float(last_no2)],
-            'aqi_change_rate': [0.0] 
-        }
-        
-        X = pd.DataFrame(input_data)
-        X = X[training_feature_names] 
-        
-        # Predict
-        prediction = model.predict(X)
-        prediction_value = float(prediction[0][0]) if is_nn else float(prediction[0])
-        
-        forecast_data.append({
-            'forecast_time': next_time,
-            'predicted_aqi': round(prediction_value, 2)
-        })
-        
-        # Recursive update
-        current_aqi = prediction_value
+# --- MODEL 1: Ridge Regression (Statistical/Linear) ---
+print("🏃 Training Ridge Regression...")
+model_ridge = Ridge()
+model_ridge.fit(X_train, y_train)
+preds_ridge = model_ridge.predict(X_test)
 
-    # 5. Save results
-    forecast_df = pd.DataFrame(forecast_data)
-    os.makedirs('data', exist_ok=True)
-    forecast_df.to_csv('data/aqi_forecast_72h.csv', index=False)
-    print("✅ 72-hour forecast successfully saved to data/aqi_forecast_72h.csv")
+# --- MODEL 2: Random Forest (Tree-based/Non-linear) ---
+print("🌲 Training Random Forest...")
+model_rf = RandomForestRegressor(n_estimators=100, random_state=42)
+model_rf.fit(X_train, y_train)
+preds_rf = model_rf.predict(X_test)
 
-if __name__ == "__main__":
-    run_inference()
+# --- MODEL 3: Neural Network (Deep Learning/TensorFlow) ---
+print("🧠 Training Neural Network (TensorFlow)...")
+model_nn = Sequential([
+    Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
+    Dropout(0.2),
+    Dense(32, activation='relu'),
+    Dense(1)
+])
+model_nn.compile(optimizer='adam', loss='mse')
+# Small number of epochs for the first run
+model_nn.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0)
+preds_nn = model_nn.predict(X_test).flatten()
+
+# 4. EVALUATION & COMPARISON
+# We compare models based on Mean Absolute Error (lower is better)
+results = [
+    {"Model": "Ridge", "MAE": mean_absolute_error(y_test, preds_ridge), "R2": r2_score(y_test, preds_ridge)},
+    {"Model": "RandomForest", "MAE": mean_absolute_error(y_test, preds_rf), "R2": r2_score(y_test, preds_rf)},
+    {"Model": "NeuralNetwork", "MAE": mean_absolute_error(y_test, preds_nn), "R2": r2_score(y_test, preds_nn)}
+]
+
+print("\n--- Model Comparison Results ---")
+for res in results:
+    print(f"📊 {res['Model']} -> MAE: {res['MAE']:.2f}, R2: {res['R2']:.2f}")
+
+# 5. SELECT WINNER & SAVE TO REGISTRY
+best_res = min(results, key=lambda x: x['MAE'])
+best_model_name = best_res['Model']
+print(f"\n🏆 WINNER: {best_model_name} with MAE: {best_res['MAE']:.2f}")
+
+# Ensure local models folder exists
+os.makedirs('models', exist_ok=True)
+local_model_path = f"models/best_aqi_model_{best_model_name.lower()}"
+
+# Save the winning model object
+if best_model_name == "Ridge":
+    joblib.dump(model_ridge, local_model_path + ".joblib")
+    final_path = local_model_path + ".joblib"
+elif best_model_name == "RandomForest":
+    joblib.dump(model_rf, local_model_path + ".joblib")
+    final_path = local_model_path + ".joblib"
+else:
+    model_nn.save(local_model_path + ".h5")
+    final_path = local_model_path + ".h5"
+
+# Upload to Hopsworks Model Registry
+mr = project.get_model_registry()
+aqi_model = mr.python.create_model(
+    name="karachi_aqi_model", 
+    metrics={"mae": best_res['MAE'], "r2": best_res['R2']},
+    description=f"Best performing model ({best_model_name}) for Karachi AQI"
+)
+aqi_model.save(final_path)
+
+print(f"✅ Successfully uploaded {best_model_name} to Hopsworks Model Registry!")
