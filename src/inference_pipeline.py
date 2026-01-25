@@ -21,7 +21,7 @@ def run_inference():
     mr = project.get_model_registry()
     
     # Download the best model
-    model_meta = mr.get_model("karachi_aqi_model", version=1)
+    model_meta = mr.get_best_model("karachi_aqi_model", "r2", "max")
     model_dir = model_meta.download()
     # Note: Depending on your model choice, it might be .joblib or .h5
     model_path = os.path.join(model_dir, "best_model.joblib")
