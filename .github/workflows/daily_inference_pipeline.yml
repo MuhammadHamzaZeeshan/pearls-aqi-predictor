@@ -1,0 +1,41 @@
+name: Daily AQI Data Prediction
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch: 
+
+# --- ADD THIS SECTION ---
+permissions:
+  contents: write  # Allows the bot to push the CSV back to your repo
+# ------------------------
+
+jobs:
+  daily_prediction:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        # Added 'hopsworks[python]' to ensure pyarrow/storage works
+        run: pip install pandas requests "hopsworks[python]==4.2.*" python-dotenv joblib
+
+      - name: Run Prediction Script
+        env:
+          HOPSWORKS_TOKEN: ${{ secrets.HOPSWORKS_TOKEN }}
+          OPENWEATHER_TOKEN: ${{ secrets.OPENWEATHER_TOKEN }}
+        run: python src/inference_pipeline.py
+
+      # --- ADD THIS STEP ---
+      - name: Commit and Push changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add data/aqi_forecast_72h.csv data/model_info.json
+          git commit -m "Auto-update: New 72h forecast and model metadata [skip ci]" || echo "No changes to commit"
+          git push
