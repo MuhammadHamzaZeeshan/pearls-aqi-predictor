@@ -1,34 +1,13 @@
-name: Hourly AQI Data Fetch
+name: Cron Test (Every Minute)
 
 on:
   schedule:
-    - cron: '0 * * * *' # Runs every hour
-  workflow_dispatch:    # Allows manual trigger
+    - cron: "* * * * *"   # every minute
+  workflow_dispatch:     # optional: allow manual run
 
 jobs:
-  hourly_data_fetch:
+  test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.11'
-          
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install "hopsworks[python]==4.2.*" pandas requests python-dotenv
-          
-      - name: Verify Environment Variables
-        run: |
-          if [ -z "${{ secrets.HOPSWORKS_TOKEN }}" ]; then echo "❌ HOPSWORKS_TOKEN is missing!"; exit 1; fi
-          if [ -z "${{ secrets.OPENWEATHER_TOKEN }}" ]; then echo "❌ OPENWEATHER_TOKEN is missing!"; exit 1; fi
-          echo "✅ Secrets are present."
-
-      - name: Run Data Fetch Script
-        env:
-          HOPSWORKS_TOKEN: ${{ secrets.HOPSWORKS_TOKEN }}
-          OPENWEATHER_TOKEN: ${{ secrets.OPENWEATHER_TOKEN }}
-        run: python src/feature_pipeline.py
+      - name: Just running
+        run: echo "Cron job ran successfully"
