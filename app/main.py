@@ -132,7 +132,20 @@ def main():
         st.subheader("3-Day Outlook")
         df['date'] = df['forecast_time'].dt.date
         today = datetime.now().date()
-        daily = df[df['date'] > today].groupby('date')['predicted_aqi'].mean().head(3).reset_index()
+        
+        # Group by date and calculate average AQI for each day
+        daily = df.groupby('date')['predicted_aqi'].mean().reset_index()
+        daily = daily.sort_values('date').reset_index(drop=True)
+        
+        # Logic: If we have 4+ unique dates, skip the first (current day)
+        # If we have 3 or fewer dates, use all of them to ensure 3-day forecast
+        unique_dates_count = len(daily)
+        if unique_dates_count >= 4:
+            # Skip current day (first date), take next 3 days
+            daily = daily.iloc[1:4]
+        else:
+            # Use all available dates (should be 3)
+            daily = daily.head(3)
         
         cols = st.columns(3)
         for i, row in daily.iterrows():
