@@ -15,7 +15,7 @@ def run_inference():
     mr = project.get_model_registry()
     
     # --- INDUSTRY THRESHOLD CHECK (REALISTIC ZONE) ---
-    MAX_REALISTIC_R2 = 0.92  # Anything higher is rejected as overfitted
+    MAX_REALISTIC_R2 = 0.90  # Anything higher is rejected as overfitted
     MIN_ACCEPTABLE_R2 = 0.60  # Anything lower is rejected as underfitted
     
     print("🔎 Searching for a realistic, high-performing model...")
@@ -72,7 +72,7 @@ def run_inference():
     training_feature_names = [f.name for f in feature_view.query.features 
                              if f.name not in ['datetime', 'aqi']]
 
-    for i in range(1, 73):
+    for i in range(0, 72):
         next_time = current_time + timedelta(hours=i)
         
         input_data = {
