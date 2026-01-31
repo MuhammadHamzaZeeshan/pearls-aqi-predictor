@@ -61,7 +61,8 @@ def run_inference():
     df = fg.read().sort_values(by="datetime").tail(1)
     
     current_aqi = df['aqi'].values[0]
-    current_time = pd.to_datetime(df['datetime'].values[0])
+    today = datetime.now().date()
+    current_time = datetime.combine(today + timedelta(days=1), datetime.min.time())
     last_pm25 = df['pm2_5'].values[0]
     last_co = df['co'].values[0]
     last_no2 = df['no2'].values[0]
