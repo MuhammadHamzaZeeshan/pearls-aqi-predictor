@@ -72,25 +72,47 @@ def run_inference():
     training_feature_names = [f.name for f in feature_view.query.features 
                              if f.name not in ['datetime', 'aqi']]
 
+    previous_aqi = current_aqi
+    
     for i in range(0, 72):
         next_time = current_time + timedelta(hours=i)
         
+        # Simulate realistic pollutant decay over 72 hours (gradual reduction)
+        decay_factor = 1.0 - (i * 0.008)  # 0.8% decay per hour
+        decay_factor = max(decay_factor, 0.3)  # Don't go below 30% of original
+        
+        # Apply rush hour multiplier for certain hours (peak pollution)
+        rush_hour_multiplier = 1.2 if next_time.hour in [7, 8, 9, 17, 18, 19] else 0.95
+        
+        adjusted_co = last_co * decay_factor * rush_hour_multiplier
+        adjusted_no2 = last_no2 * decay_factor * rush_hour_multiplier
+        adjusted_pm25 = last_pm25 * decay_factor * rush_hour_multiplier
+        adjusted_pm10 = df['pm10'].values[0] * decay_factor * rush_hour_multiplier
+        
+        # Calculate actual AQI change rate
+        aqi_change_rate = current_aqi - previous_aqi if i > 0 else 0
+        
         input_data = {
-            'co': [last_co], 'no2': [last_no2], 'o3': [df['o3'].values[0]], 
-            'so2': [df['so2'].values[0]], 'pm2_5': [last_pm25], 'pm10': [df['pm10'].values[0]], 
-            'nh3': [df['nh3'].values[0]],
+            'co': [adjusted_co], 'no2': [adjusted_no2], 'o3': [df['o3'].values[0] * decay_factor], 
+            'so2': [df['so2'].values[0] * decay_factor], 'pm2_5': [adjusted_pm25], 'pm10': [adjusted_pm10], 
+            'nh3': [df['nh3'].values[0] * decay_factor],
             'hour': [next_time.hour],
             'day_of_week': [next_time.weekday()],
             'month': [next_time.month],
             'aqi_lag_1h': [current_aqi],
-            'pm2_5_lag_1h': [last_pm25],
-            'co_lag_1h': [last_co],
-            'no2_lag_1h': [last_no2],
-            'aqi_change_rate': [0]
+            'pm2_5_lag_1h': [adjusted_pm25],
+            'co_lag_1h': [adjusted_co],
+            'no2_lag_1h': [adjusted_no2],
+            'aqi_change_rate': [aqi_change_rate]
         }
         
         X = pd.DataFrame(input_data)[training_feature_names]
         prediction = model.predict(X)[0]
+        
+        # Add small stochastic noise to prevent unrealistic flatness
+        noise = np.random.normal(0, 0.3)
+        prediction = prediction + noise
+        prediction = max(0, prediction)  # AQI can't be negative
         
         forecast_data.append({
             'forecast_time': next_time,
@@ -98,6 +120,7 @@ def run_inference():
         })
         
         # Recursive update
+        previous_aqi = current_aqi
         current_aqi = prediction
 
     # 5. Save Artifacts
