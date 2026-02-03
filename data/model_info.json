@@ -2,5 +2,5 @@
   "model_name": "RandomForestRegressor",
   "model_version": 13,
   "model_r2": 0.8914788241357258,
-  "inference_time": "2026-01-31T09:44:44.255326"
+  "inference_time": "2026-02-03T11:06:02.197605"
 }
