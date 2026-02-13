@@ -94,6 +94,27 @@ st.markdown("""
 
     .badge-winner { background: rgba(36, 161, 72, 0.2); color: #24A148; border: 1px solid #24A148; }
     .badge-other { background: rgba(139, 148, 158, 0.1); color: #8B949E; border: 1px solid #30363D; }
+
+    .aqi-guide-card {
+        background: linear-gradient(135deg, #161B22 0%, #21262D 100%);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 18px 14px;
+        height: 100%;
+        transition: all 0.3s ease;
+    }
+    .aqi-guide-card:hover { transform: translateY(-4px); }
+    .aqi-guide-range { font-family: 'Poppins', sans-serif; font-size: 1.1rem; font-weight: 700; margin-bottom: 4px; }
+    .aqi-guide-label { font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+    .aqi-guide-desc { font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4; margin-bottom: 10px; }
+    .aqi-guide-action {
+        font-size: 0.78rem;
+        font-weight: 600;
+        padding: 8px 10px;
+        border-radius: 8px;
+        background: rgba(15, 98, 254, 0.08);
+        line-height: 1.4;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -174,6 +195,41 @@ def main():
             st.markdown(f'<div class="metric-card"><div class="metric-label">Model Engine</div><div class="metric-value" style="font-size:1.5rem">{display_name}</div><div>Version {model_info.get("model_version", "1.0")}</div></div>', unsafe_allow_html=True)
         with c3:
             st.markdown(f'<div class="metric-card"><div class="metric-label">Model Confidence</div><div class="metric-value" style="font-size:1.5rem">{model_info.get("model_r2", 0.87):.2f} R²</div><div>Realistic Zone Certified</div></div>', unsafe_allow_html=True)
+
+        # ── AQI GUIDE — WHAT SHOULD YOU DO? ───────────────
+        st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
+        st.subheader("Understanding AQI — What Should You Do?")
+        st.caption("The Air Quality Index (AQI) scale ranges from **0** (cleanest air) to **5** (most hazardous). Here's what each level means for you and your family.")
+
+        aqi_guide = [
+            ("0 – 1.5", "Good", "#24A148",
+             "Air quality is satisfactory with little or no health risk.",
+             "Enjoy outdoor activities freely."),
+            ("1.5 – 2.5", "Fair", "#F1C21B",
+             "Acceptable air quality; sensitive individuals may experience mild discomfort.",
+             "Sensitive groups should limit prolonged outdoor exertion."),
+            ("2.5 – 3.5", "Moderate", "#FF8C00",
+             "Some pollutants may affect sensitive groups. General public is less likely to be affected.",
+             "Reduce prolonged outdoor activities if you feel symptoms."),
+            ("3.5 – 4.5", "Poor", "#DA1E28",
+             "Health effects possible for everyone; serious effects for sensitive groups.",
+             "Avoid outdoor exercise. Keep windows closed."),
+            ("4.5 – 5.0", "Very Poor", "#8B00FF",
+             "Emergency health alert. Entire population is at risk.",
+             "Stay indoors. Use air purifiers. Wear N95 masks if going outside."),
+        ]
+
+        guide_cols = st.columns(5)
+        for idx, (rng, label, color, desc, action) in enumerate(aqi_guide):
+            with guide_cols[idx]:
+                st.markdown(f"""
+                    <div class="aqi-guide-card" style="border-left: 4px solid {color};">
+                        <div class="aqi-guide-range" style="color:{color}">{rng}</div>
+                        <div class="aqi-guide-label" style="color:{color}">{label}</div>
+                        <div class="aqi-guide-desc">{desc}</div>
+                        <div class="aqi-guide-action">{action}</div>
+                    </div>
+                """, unsafe_allow_html=True)
 
         # ── 3-DAY OUTLOOK ───────────────────────────────────
         st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
