@@ -491,7 +491,7 @@ def main():
         if model_info.get("models"):
             st.markdown('<hr class="section-divider">', unsafe_allow_html=True)
             st.subheader("Model Registry Comparison")
-            st.caption(f"Selection criteria: {model_info.get('selection_criteria', 'Lowest MAE')} | Last trained: {model_info.get('trained_at', 'N/A')[:10]}")
+            st.caption(f"Selection criteria: {model_info.get('selection_criteria', 'Lowest MAE')}")
 
             models = model_info["models"]
             names = [m["name"] for m in models]
