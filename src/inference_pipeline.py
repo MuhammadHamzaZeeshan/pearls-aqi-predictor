@@ -119,7 +119,7 @@ def run_inference():
         # Add small stochastic noise to prevent unrealistic flatness
         noise = np.random.normal(0, 0.3)
         prediction = prediction + noise
-        prediction = max(0, prediction)  # AQI can't be negative
+        prediction = max(0, min(prediction, 5))  # Clamp AQI to valid 0-5 range
         
         forecast_data.append({
             'forecast_time': next_time,
