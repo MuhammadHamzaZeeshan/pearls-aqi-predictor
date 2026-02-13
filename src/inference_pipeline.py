@@ -44,13 +44,20 @@ def run_inference():
          model_path = os.path.join(model_dir, "best_model.h5")
     
     model = joblib.load(model_path)
-    
-    model_info = {
-        'model_name': type(model).__name__,
-        'model_version': model_meta.version,
-        'model_r2': model_meta.training_metrics.get('r2'),
-        'inference_time': datetime.now().isoformat()
-    }
+
+    # Load existing model_info.json (has training comparison data) and merge
+    model_info_path = os.path.join('data', 'model_info.json')
+    try:
+        with open(model_info_path, 'r') as f:
+            model_info = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        model_info = {}
+
+    # Update with inference-specific fields
+    model_info['model_name'] = type(model).__name__
+    model_info['model_version'] = model_meta.version
+    model_info['model_r2'] = model_meta.training_metrics.get('r2')
+    model_info['inference_time'] = datetime.now().isoformat()
     
     # 3. Setup Feature Store & View
     fs = project.get_feature_store()

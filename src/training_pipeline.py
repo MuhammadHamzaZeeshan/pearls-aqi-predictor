@@ -2,6 +2,7 @@ import hopsworks
 import pandas as pd
 import joblib
 import os
+import json
 import numpy as np
 from dotenv import load_dotenv
 from sklearn.linear_model import Ridge
@@ -11,6 +12,7 @@ import tensorflow as tf
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
+from datetime import datetime
 
 load_dotenv()
 project = hopsworks.login(api_key_value=os.getenv('HOPSWORKS_TOKEN'))
@@ -90,9 +92,9 @@ p3 = m3.predict(X_test).flatten()
 
 # 5. Results & Selection
 results = [
-    {"Name": "Ridge", "MAE": mean_absolute_error(y_test, p1), "Model": m1, "Ext": ".joblib"},
-    {"Name": "RandomForest", "MAE": mean_absolute_error(y_test, p2), "Model": m2, "Ext": ".joblib"},
-    {"Name": "NeuralNetwork", "MAE": mean_absolute_error(y_test, p3), "Model": m3, "Ext": ".h5"}
+    {"Name": "Ridge", "MAE": mean_absolute_error(y_test, p1), "R2": r2_score(y_test, p1), "Model": m1, "Ext": ".joblib"},
+    {"Name": "RandomForest", "MAE": mean_absolute_error(y_test, p2), "R2": r2_score(y_test, p2), "Model": m2, "Ext": ".joblib"},
+    {"Name": "NeuralNetwork", "MAE": mean_absolute_error(y_test, p3), "R2": r2_score(y_test, p3), "Model": m3, "Ext": ".h5"}
 ]
 
 best = min(results, key=lambda x: x['MAE'])
@@ -102,6 +104,26 @@ best_r2 = r2_score(y_test, best_p)
 print(f"\n🏆 Winner: {best['Name']}")
 print(f"📊 Realistic MAE: {best['MAE']:.4f}")
 print(f"📈 Realistic R2 Score: {best_r2:.4f}")
+
+# 5b. Save Model Comparison Metrics for Dashboard
+os.makedirs('data', exist_ok=True)
+model_info = {
+    "trained_at": datetime.now().isoformat(),
+    "selected_model": best['Name'],
+    "selection_criteria": "Lowest MAE on 80/20 time-series split",
+    "models": [
+        {
+            "name": r["Name"],
+            "mae": round(r["MAE"], 4),
+            "r2": round(r["R2"], 4),
+            "selected": r["Name"] == best["Name"]
+        }
+        for r in results
+    ]
+}
+with open('data/model_info.json', 'w') as f:
+    json.dump(model_info, f, indent=2)
+print("📊 Model comparison metrics saved to data/model_info.json")
 
 # 6. Save & Register
 os.makedirs('models', exist_ok=True)
