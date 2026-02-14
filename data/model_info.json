@@ -21,5 +21,9 @@
       "r2": 0.6777,
       "selected": false
     }
-  ]
+  ],
+  "model_name": "RandomForestRegressor",
+  "model_version": 13,
+  "model_r2": 0.8914788241357258,
+  "inference_time": "2026-02-14T02:13:32.086953"
 }
