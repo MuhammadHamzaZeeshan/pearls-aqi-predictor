@@ -1,41 +1,221 @@
 # Pearls: Karachi AQI Predictor
-**A serverless MLOps engine for real-time air quality forecasting.**
+
+A serverless MLOps system for predicting Air Quality Index (AQI) trends in Karachi, Pakistan.
 
 ---
 
-### Overview
-This project was developed during the **10Pearls Data Science Internship (January 2026)**. It implements a complete end-to-end MLOps lifecycle to predict Air Quality Index (AQI) trends for the Karachi Metropolitan area. 
+## Overview
 
-The system utilizes a **Serverless Architecture** to ingest live data, update features, and serve 72-hour forecasts with a verified **0.87 R² Score**, ensuring the model captures true atmospheric trends rather than just overfitted noise.
+This project was developed during the 10Pearls Data Science Internship (January 2026). It implements a complete end-to-end MLOps lifecycle to predict Air Quality Index (AQI) for the Karachi Metropolitan area.
 
-
-
----
-
-### Key Features
-* **Real-Time Data Ingestion:** Automated hourly pollutants (PM2.5, CO, NO2) and weather fetching from OpenWeather API.
-* **Serverless MLOps:** Uses GitHub Actions to orchestrate the feature, training, and inference pipelines.
-* **Metric-Based Model Selection:** Automatically deploys the "Best Model" from the Hopsworks Model Registry based on R² and MAE thresholds.
-* **Recursive Forecasting:** Implements a time-series recursive loop to generate high-resolution 72-hour future trends.
-* **Sober Dashboard:** A professional, minimalist Streamlit interface designed for high-contrast readability.
+The system fetches live pollution data from OpenWeather API, stores features in Hopsworks Feature Store, trains machine learning models, and generates 72-hour AQI forecasts. The best performing model achieves an R2 score of 0.89 with a Mean Absolute Error (MAE) of 0.32.
 
 ---
 
-### Technical Architecture
-The project is structured into three distinct heartbeats:
+## Key Features
 
-1.  **Feature Pipeline (Hourly):** Ingests raw data and performs engineering (lags, change rates) into the Hopsworks Feature Store.
-2.  **Inference Pipeline (Hourly):** Fetches the latest "Realistic" model and generates a new `72h_forecast.csv`.
-3.  **Training Pipeline (Daily):** Retrains the Random Forest and Neural Network models on the accumulated daily data to prevent model staleness.
+- Real-time data ingestion from OpenWeather API (hourly updates)
+- Serverless automation using GitHub Actions
+- Feature storage and versioning with Hopsworks
+- Automatic model selection based on MAE and R2 thresholds
+- 72-hour recursive forecasting
+- Interactive Streamlit dashboard for visualization
 
 ---
 
-### Project Structure
-```text
+## Project Structure
+
+```
 pearls-aqi-predictor/
-├── .github/workflows/    # CI/CD pipelines (Automation)
-├── app/                  # Streamlit Dashboard (UI)
-├── data/                 # Local data caches for fast serving
-├── src/                  # Core Logic (Feature, Training, Inference)
-├── requirements.txt      # Project dependencies
-└── .env                  # Environment secrets (API Tokens)
+|
+|-- .github/
+|   |-- workflows/
+|       |-- hourly_feature_pipeline.yml    # Fetches new data every hour
+|       |-- daily_training_pipeline.yml    # Retrains models daily at midnight
+|       |-- daily_inference_pipeline.yml   # Generates 72h forecast daily
+|
+|-- app/
+|   |-- main.py                            # Streamlit dashboard application
+|   |-- requirements.txt                   # Dashboard dependencies
+|
+|-- data/
+|   |-- aqi_forecast_72h.csv               # Latest 72-hour predictions
+|   |-- karachi_aqi_history.csv            # Historical AQI data (Aug 2025 - Jan 2026)
+|   |-- model_info.json                    # Model metrics and selection info
+|
+|-- Images/                                # Project images and visuals
+|
+|-- models/
+|   |-- best_model.joblib                  # Saved best performing model
+|   |-- karachi_aqi_model.joblib           # Local model copy
+|
+|-- notebooks/
+|   |-- 01_Initial_EDA.ipynb               # Exploratory data analysis notebook
+|
+|-- src/
+|   |-- backfill_data.py                   # Fetches historical data from OpenWeather
+|   |-- feature_pipeline.py                # Hourly data fetch and feature engineering
+|   |-- hopsworks_backfill.py              # Uploads historical data to Hopsworks
+|   |-- inference_pipeline.py              # Generates 72-hour forecasts
+|   |-- predict_next_hour.py               # Single hour prediction script
+|   |-- test_api.py                        # API connection test script
+|   |-- training_pipeline.py               # Model training and evaluation
+|
+|-- karachi_daily_aqi_weather.csv          # Additional weather data
+|-- requirements.txt                       # Project dependencies
+|-- README.md                              # This file
+```
+
+---
+
+## Workflow
+
+The system operates on three automated pipelines:
+
+### 1. Feature Pipeline (Runs Hourly)
+
+- Fetches current AQI and pollutant data from OpenWeather API
+- Extracts pollutants: PM2.5, PM10, CO, NO2, O3, SO2, NH3
+- Engineers features: time features (hour, day_of_week, month), lag features (aqi_lag_1h, pm2_5_lag_1h, co_lag_1h, no2_lag_1h), and change rate
+- Inserts new data into Hopsworks Feature Store
+
+### 2. Training Pipeline (Runs Daily)
+
+- Reads all data from the Feature Store
+- Applies time-series split (80% train, 20% test) to prevent data leakage
+- Trains three models:
+  - Ridge Regression (alpha=50.0)
+  - Random Forest (max_depth=5, n_estimators=50)
+  - Neural Network (16-8-1 architecture with dropout)
+- Selects the model with lowest MAE
+- Registers the best model in Hopsworks Model Registry
+
+### 3. Inference Pipeline (Runs Daily)
+
+- Downloads the best model from Model Registry
+- Validates model R2 score (must be between 0.60 and 0.90)
+- Generates 72-hour recursive forecast
+- Saves predictions to `data/aqi_forecast_72h.csv`
+
+---
+
+## Model Performance
+
+| Model          | MAE    | R2 Score | Selected |
+|----------------|--------|----------|----------|
+| Ridge          | 0.5243 | 0.7612   | No       |
+| Random Forest  | 0.3185 | 0.8915   | Yes      |
+| Neural Network | 0.4021 | 0.8340   | No       |
+
+The Random Forest model was selected based on lowest Mean Absolute Error.
+
+---
+
+## Features Used
+
+The model uses 15 features for prediction:
+
+- **Pollutants**: co, no2, o3, so2, pm2_5, pm10, nh3
+- **Time Features**: hour, day_of_week, month
+- **Lag Features**: aqi_lag_1h, pm2_5_lag_1h, co_lag_1h, no2_lag_1h
+- **Change Features**: aqi_change_rate
+
+---
+
+## How to Run
+
+### Prerequisites
+
+- Python 3.11
+- OpenWeather API key (for air pollution data)
+- Hopsworks account and API token
+
+### Setup
+
+1. Clone the repository:
+   ```
+   git clone https://github.com/MuhammadHamzaZeeshan/pearls-aqi-predictor.git
+   cd pearls-aqi-predictor
+   ```
+
+2. Install dependencies:
+   ```
+   pip install -r requirements.txt
+   ```
+
+3. Create a `.env` file in the root directory:
+   ```
+   HOPSWORKS_TOKEN=your_hopsworks_api_key
+   OPENWEATHER_TOKEN=your_openweather_api_key
+   ```
+
+### Running the Pipelines Locally
+
+**Fetch new data (Feature Pipeline):**
+```
+python src/feature_pipeline.py
+```
+
+**Train models (Training Pipeline):**
+```
+python src/training_pipeline.py
+```
+
+**Generate forecast (Inference Pipeline):**
+```
+python src/inference_pipeline.py
+```
+
+### Running the Dashboard
+
+```
+cd app
+pip install -r requirements.txt
+streamlit run main.py
+```
+
+The dashboard will open in your browser showing:
+- Current AQI status
+- 72-hour forecast chart
+- Model comparison metrics
+- Historical pollutant trends
+
+---
+
+## Data Sources
+
+- **AQI and Pollutant Data**: OpenWeather Air Pollution API
+- **Location**: Karachi, Pakistan (Lat: 24.8607, Lon: 67.0011)
+- **Historical Range**: August 2025 to present
+- **Update Frequency**: Hourly
+
+---
+
+## GitHub Actions Automation
+
+The repository includes three GitHub Actions workflows that run automatically:
+
+- `hourly_feature_pipeline.yml` - Runs every hour at minute 0
+- `daily_training_pipeline.yml` - Runs daily at midnight UTC
+- `daily_inference_pipeline.yml` - Runs daily at midnight UTC
+
+To enable automation, add the following secrets to your GitHub repository:
+- `HOPSWORKS_TOKEN`
+- `OPENWEATHER_TOKEN`
+
+---
+
+## Technologies Used
+
+- **Machine Learning**: scikit-learn, TensorFlow/Keras
+- **Feature Store**: Hopsworks
+- **Data Processing**: pandas, numpy
+- **Visualization**: Streamlit, Plotly
+- **Automation**: GitHub Actions
+- **Model Serialization**: joblib
+
+---
+
+## License
+
+This project was developed as part of the 10Pearls Data Science Internship program.
