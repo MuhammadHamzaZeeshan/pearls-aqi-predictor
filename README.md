@@ -6,9 +6,9 @@ A serverless MLOps system for predicting Air Quality Index (AQI) trends in Karac
 
 ## Overview
 
-This project was developed during the 10Pearls Data Science Internship (January 2026). It implements a complete end-to-end MLOps lifecycle to predict Air Quality Index (AQI) for the Karachi Metropolitan area.
+This project was developed during the 10Pearls Data Science Internship. It implements a complete end-to-end MLOps lifecycle to predict Air Quality Index (AQI) for the Karachi Metropolitan area.
 
-The system fetches live pollution data from OpenWeather API, stores features in Hopsworks Feature Store, trains machine learning models, and generates 72-hour AQI forecasts. The best performing model achieves an R2 score of 0.89 with a Mean Absolute Error (MAE) of 0.32.
+The system fetches live pollution data from OpenWeather API, stores features in Hopsworks Feature Store, trains machine learning models, and generates 72-hour AQI forecasts.
 
 ---
 
@@ -20,6 +20,16 @@ The system fetches live pollution data from OpenWeather API, stores features in 
 - Automatic model selection based on MAE and R2 thresholds
 - 72-hour recursive forecasting
 - Interactive Streamlit dashboard for visualization
+
+---
+
+## Live Dashboard
+
+The interactive AQI prediction dashboard is deployed and accessible online:
+
+**[https://pearls-aqi-predictor-hamza.streamlit.app/](https://pearls-aqi-predictor-hamza.streamlit.app/)**
+
+View real-time 72-hour AQI forecasts for Karachi, historical trends, and model performance metrics.
 
 ---
 
@@ -93,30 +103,18 @@ The system operates on three automated pipelines:
 ### 3. Inference Pipeline (Runs Daily)
 
 - Downloads the best model from Model Registry
-- Validates model R2 score (must be between 0.60 and 0.90)
+- Validates model R2 score
 - Generates 72-hour recursive forecast
 - Saves predictions to `data/aqi_forecast_72h.csv`
 
 ---
 
-## Model Performance
-
-| Model          | MAE    | R2 Score | Selected |
-|----------------|--------|----------|----------|
-| Ridge          | 0.5243 | 0.7612   | No       |
-| Random Forest  | 0.3185 | 0.8915   | Yes      |
-| Neural Network | 0.4021 | 0.8340   | No       |
-
-The Random Forest model was selected based on lowest Mean Absolute Error.
-
----
-
 ## Features Used
 
-The model uses 15 features for prediction:
+The model uses 17 features for prediction:
 
-- **Pollutants**: co, no2, o3, so2, pm2_5, pm10, nh3
-- **Time Features**: hour, day_of_week, month
+- **Pollutants**: co, no2, o3, so2, pm2_5, pm10, nh3, aqi
+- **Time Features**: datetime, hour, day_of_week, month
 - **Lag Features**: aqi_lag_1h, pm2_5_lag_1h, co_lag_1h, no2_lag_1h
 - **Change Features**: aqi_change_rate
 
