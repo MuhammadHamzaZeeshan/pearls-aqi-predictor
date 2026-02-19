@@ -1,29 +1,25 @@
 {
-  "trained_at": "2026-02-18T01:09:45.057215",
+  "trained_at": "2026-02-19T01:08:57.099712",
   "selected_model": "Ridge",
   "selection_criteria": "Lowest MAE on 80/20 time-series split",
   "models": [
     {
       "name": "Ridge",
-      "mae": 0.1238,
-      "r2": 0.9241,
+      "mae": 0.1227,
+      "r2": 0.9234,
       "selected": true
     },
     {
       "name": "RandomForest",
-      "mae": 0.1486,
-      "r2": 0.929,
+      "mae": 0.1485,
+      "r2": 0.9278,
       "selected": false
     },
     {
       "name": "NeuralNetwork",
-      "mae": 0.354,
-      "r2": 0.7471,
+      "mae": 0.375,
+      "r2": 0.7203,
       "selected": false
     }
-  ],
-  "model_name": "RandomForestRegressor",
-  "model_version": 19,
-  "model_r2": 0.9198781289583393,
-  "inference_time": "2026-02-18T02:28:40.379653"
+  ]
 }
