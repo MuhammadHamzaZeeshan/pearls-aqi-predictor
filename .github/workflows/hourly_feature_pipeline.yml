@@ -1,8 +1,8 @@
 name: Hourly AQI Data Fetch
 
 on:
-  schedule:
-    - cron: '0 * * * *' # Runs every hour
+  # schedule:
+  #   - cron: '0 * * * *' # Runs every hour
   workflow_dispatch:    # Allows manual trigger
 
 jobs:

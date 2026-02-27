@@ -1,8 +1,8 @@
 name: Daily Model Retraining
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Runs every day at midnight
+  # schedule:
+  #   - cron: '0 0 * * *' # Runs every day at midnight
   workflow_dispatch:
 
 permissions:

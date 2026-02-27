@@ -1,9 +1,9 @@
 name: Daily AQI Data Prediction
 
 on:
-  schedule:
-    - cron: '0 0 * * *' # Every day at midnight
-  workflow_dispatch: 
+  # schedule:
+  #   - cron: '0 0 * * *' # Every day at midnight
+  workflow_dispatch:  
 
 # --- ADD THIS SECTION ---
 permissions:
